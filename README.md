@@ -1,5 +1,7 @@
 # SoleCraft Service Request
 
+[![GitHub repo](https://img.shields.io/badge/GitHub-utsavv08%2Fshoe--repair--portal-blue?logo=github)](https://github.com/utsavv08/shoe-repair-portal)
+
 A clean, responsive standard web form built with **Next.js (App Router)**, **React 19**, **TypeScript**, and **Tailwind CSS** for a shoe repair startup.
 
 Designed for quick deployment on **Vercel** or **AWS Amplify**, featuring **client-side image compression** and direct **Amazon S3 / Google Cloud Storage** pre-signed URL uploads.
