@@ -1,0 +1,66 @@
+// SoleCraft Shoe Repair & Sneaker Restoration Portal
+// Local development uses embedded SQLite (zero setup required)
+// Production can be pushed to PostgreSQL (Supabase, Neon, AWS RDS) using schema.postgresql.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id             String          @id @default(uuid())
+  mobile         String          @unique // Uniquely identifies each customer across repeat visits
+  name           String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  repairRequests RepairRequest[]
+
+  @@index([mobile])
+}
+
+model RepairRequest {
+  id             String      @id @default(uuid())
+  trackingId     String      @unique // e.g. SR-2026-5694
+  customerId     String
+  customer       Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  repairType     String      // e.g. Sole Repair / Resoling
+  shoeBrand      String?     // e.g. Nike, Red Wing, Clarks
+  shoeModel      String?     // e.g. Air Jordan 1, 8111
+  shoeSize       String?     // e.g. UK 9 / US 10 / EU 43
+  
+  pickupLocation String      // Full address
+  pickupDate     String      // YYYY-MM-DD
+  pickupTimeSlot String      // e.g. Morning (09:00 AM - 01:00 PM)
+  
+  status         String      @default("PENDING_PICKUP") // PENDING_PICKUP | IN_REPAIR | RESTORED | OUT_FOR_DELIVERY | DELIVERED
+  notes          String?     // Custom instructions
+  
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  
+  photos         ShoePhoto[]
+
+  @@index([customerId])
+  @@index([trackingId])
+  @@index([status])
+}
+
+model ShoePhoto {
+  id              String        @id @default(uuid())
+  repairRequestId String
+  repairRequest   RepairRequest @relation(fields: [repairRequestId], references: [id], onDelete: Cascade)
+  
+  angle           String        // front | left | right | back | tongue | detail
+  s3Url           String        // Cloud URL on Amazon S3 / Google Cloud Storage
+  s3Key           String?       // Object key in bucket
+  originalSize    Int?          // Raw size in bytes before client compression
+  compressedSize  Int?          // Compressed size in bytes
+  createdAt       DateTime      @default(now())
+
+  @@index([repairRequestId])
+}

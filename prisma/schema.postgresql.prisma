@@ -1,0 +1,63 @@
+// Production PostgreSQL Schema (Supabase, Neon, AWS RDS, Railway, Render)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id             String          @id @default(uuid())
+  mobile         String          @unique
+  name           String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  repairRequests RepairRequest[]
+
+  @@index([mobile])
+}
+
+model RepairRequest {
+  id             String      @id @default(uuid())
+  trackingId     String      @unique
+  customerId     String
+  customer       Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  repairType     String
+  shoeBrand      String?
+  shoeModel      String?
+  shoeSize       String?
+  
+  pickupLocation String
+  pickupDate     String
+  pickupTimeSlot String
+  
+  status         String      @default("PENDING_PICKUP")
+  notes          String?
+  
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  
+  photos         ShoePhoto[]
+
+  @@index([customerId])
+  @@index([trackingId])
+  @@index([status])
+}
+
+model ShoePhoto {
+  id              String        @id @default(uuid())
+  repairRequestId String
+  repairRequest   RepairRequest @relation(fields: [repairRequestId], references: [id], onDelete: Cascade)
+  
+  angle           String
+  s3Url           String
+  s3Key           String?
+  originalSize    Int?
+  compressedSize  Int?
+  createdAt       DateTime      @default(now())
+
+  @@index([repairRequestId])
+}
