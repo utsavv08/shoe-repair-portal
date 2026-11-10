@@ -29,9 +29,18 @@ model RepairRequest {
   customer       Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
   
   repairType     String      // e.g. Sole Repair / Resoling
-  shoeBrand      String?     // e.g. Nike, Red Wing, Clarks
-  shoeModel      String?     // e.g. Air Jordan 1, 8111
-  shoeSize       String?     // e.g. UK 9 / US 10 / EU 43
+  shoeBrand      String?     // Customer-entered or fallback
+  shoeModel      String?     // Customer-entered or fallback
+  shoeSize       String?     // Customer-entered or fallback
+  
+  // Step 2: Google Cloud Vision OCR Extraction Fields (Asynchronous)
+  ocrStatus       String?     // PENDING | PROCESSING | COMPLETED | PARTIAL | FAILED | SKIPPED
+  ocrConfidence   Float?      // 0.0 to 1.0 confidence score
+  ocrRawText      String?     // Full raw OCR output from Google Cloud Vision
+  extractedBrand  String?     // Cleaned Brand isolated via Regex/Heuristics
+  extractedModel  String?     // Cleaned Style / SKU / Model code
+  extractedSize   String?     // Cleaned Size (e.g. US 9.5 / UK 8.5 / EUR 43 / CM 27.5)
+  ocrProcessedAt  DateTime?   // Timestamp when async OCR finished
   
   pickupLocation String      // Full address
   pickupDate     String      // YYYY-MM-DD
@@ -48,6 +57,7 @@ model RepairRequest {
   @@index([customerId])
   @@index([trackingId])
   @@index([status])
+  @@index([ocrStatus])
 }
 
 model ShoePhoto {
@@ -63,4 +73,5 @@ model ShoePhoto {
   createdAt       DateTime      @default(now())
 
   @@index([repairRequestId])
+  @@index([angle])
 }

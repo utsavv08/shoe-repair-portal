@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { REPAIR_SERVICES } from '@/lib/constants';
+import { processTongueTagAsync, runTongueTagOcr } from '@/lib/visionOcr';
 
 // Local in-memory fallback cache when DATABASE_URL is not yet configured
 const inMemoryOrders: any[] = [];
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     const trackingId = `SR-${year}-${randomDigits}`;
 
     const uploadedImagesList = Array.isArray(images) ? images : [];
+    const tongueImage = uploadedImagesList.find((img: any) => img.angle === 'tongue');
 
     const isDatabaseConfigured = Boolean(process.env.DATABASE_URL);
 
@@ -55,7 +57,9 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // 2. Create repair request linked to customer
+        // 2. Create repair request linked to customer with initial OCR status
+        const initialOcrStatus = tongueImage ? 'PENDING' : 'SKIPPED';
+
         const repairRequest = await prisma.repairRequest.create({
           data: {
             trackingId,
@@ -64,6 +68,7 @@ export async function POST(req: NextRequest) {
             shoeBrand: shoeBrand || null,
             shoeModel: shoeModel || null,
             shoeSize: shoeSize || null,
+            ocrStatus: initialOcrStatus,
             pickupLocation: pickupLocation.trim(),
             pickupDate,
             pickupTimeSlot: pickupTimeSlot || 'Morning (09:00 AM - 01:00 PM)',
@@ -87,10 +92,24 @@ export async function POST(req: NextRequest) {
 
         console.log(`[POSTGRESQL_SUCCESS] Stored repair request ${trackingId} for customer ${customer.name} (${customer.mobile})`);
 
+        // 3. Step 2 Asynchronous Event Trigger:
+        // Exclusively process the tongue tag image via Google Cloud Vision OCR in background
+        if (tongueImage && tongueImage.s3Url) {
+          setImmediate(() => {
+            console.log(`[EVENT_TRIGGER] Firing asynchronous Google Cloud Vision OCR event for tongue tag: ${tongueImage.s3Key || 'tongue'}`);
+            processTongueTagAsync(
+              repairRequest.id,
+              tongueImage.s3Url,
+              tongueImage.s3Key
+            ).catch((err) => console.error('[ASYNC_OCR_EVENT_FAILED]', err));
+          });
+        }
+
         return NextResponse.json({
           success: true,
-          message: 'Repair pickup request successfully saved to PostgreSQL!',
+          message: 'Repair pickup request successfully saved!',
           storage: 'postgresql',
+          ocrTriggered: Boolean(tongueImage),
           order: {
             trackingId: repairRequest.trackingId,
             customerName: customer.name,
@@ -104,17 +123,17 @@ export async function POST(req: NextRequest) {
             shoeSize: repairRequest.shoeSize || '',
             uploadedImagesCount: repairRequest.photos.length,
             status: repairRequest.status,
+            ocrStatus: repairRequest.ocrStatus,
             createdAt: repairRequest.createdAt.toISOString(),
           },
         });
       } catch (dbError: any) {
         console.error('[POSTGRESQL_ERROR] Could not connect to database, falling back to local memory:', dbError.message);
-        // Fall back gracefully below
       }
     }
 
     // Fallback in-memory storage if DATABASE_URL is not configured
-    const orderConfirmation = {
+    const orderConfirmation: any = {
       trackingId,
       customerName: customerName.trim(),
       mobile: mobile.trim(),
@@ -129,16 +148,35 @@ export async function POST(req: NextRequest) {
       uploadedImages: uploadedImagesList,
       notes: notes || '',
       status: 'PENDING_PICKUP',
+      ocrStatus: tongueImage ? 'PENDING' : 'SKIPPED',
       createdAt: new Date().toISOString(),
     };
 
     inMemoryOrders.unshift(orderConfirmation);
 
+    // Asynchronous event trigger in fallback mode
+    if (tongueImage && tongueImage.s3Url) {
+      setImmediate(async () => {
+        try {
+          const res = await runTongueTagOcr(tongueImage.s3Url);
+          orderConfirmation.extractedBrand = res.parsed.brand;
+          orderConfirmation.extractedModel = res.parsed.modelNumber;
+          orderConfirmation.extractedSize = res.parsed.sizeDetails.primary;
+          orderConfirmation.ocrConfidence = res.parsed.confidence;
+          orderConfirmation.ocrStatus = 'COMPLETED';
+          orderConfirmation.ocrRawText = res.rawText;
+          orderConfirmation.ocrProcessedAt = new Date().toISOString();
+        } catch (err) {
+          console.error('[ASYNC_FALLBACK_OCR_ERR]', err);
+        }
+      });
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Repair pickup request successfully submitted!',
       storage: 'in-memory-fallback',
-      note: 'Set DATABASE_URL in .env.local to persist directly into PostgreSQL.',
+      ocrTriggered: Boolean(tongueImage),
       order: orderConfirmation,
     });
   } catch (error: any) {

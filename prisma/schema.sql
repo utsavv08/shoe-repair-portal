@@ -21,6 +21,16 @@ CREATE TABLE IF NOT EXISTS "RepairRequest" (
     "shoeBrand" VARCHAR(100),
     "shoeModel" VARCHAR(100),
     "shoeSize" VARCHAR(50),
+    
+    -- Step 2: Google Cloud Vision OCR Extraction Fields (Asynchronous)
+    "ocrStatus" VARCHAR(50),
+    "ocrConfidence" DOUBLE PRECISION,
+    "ocrRawText" TEXT,
+    "extractedBrand" VARCHAR(100),
+    "extractedModel" VARCHAR(100),
+    "extractedSize" VARCHAR(100),
+    "ocrProcessedAt" TIMESTAMP WITH TIME ZONE,
+
     "pickupLocation" TEXT NOT NULL,
     "pickupDate" VARCHAR(50) NOT NULL,
     "pickupTimeSlot" VARCHAR(100) NOT NULL,
@@ -33,6 +43,7 @@ CREATE TABLE IF NOT EXISTS "RepairRequest" (
 CREATE INDEX IF NOT EXISTS "idx_repair_customer" ON "RepairRequest"("customerId");
 CREATE INDEX IF NOT EXISTS "idx_repair_tracking" ON "RepairRequest"("trackingId");
 CREATE INDEX IF NOT EXISTS "idx_repair_status" ON "RepairRequest"("status");
+CREATE INDEX IF NOT EXISTS "idx_repair_ocr_status" ON "RepairRequest"("ocrStatus");
 
 -- 3. Create Shoe Photos Table
 CREATE TABLE IF NOT EXISTS "ShoePhoto" (
@@ -47,3 +58,4 @@ CREATE TABLE IF NOT EXISTS "ShoePhoto" (
 );
 
 CREATE INDEX IF NOT EXISTS "idx_photo_repair" ON "ShoePhoto"("repairRequestId");
+CREATE INDEX IF NOT EXISTS "idx_photo_angle" ON "ShoePhoto"("angle");
